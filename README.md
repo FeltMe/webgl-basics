@@ -14,6 +14,4 @@
 
 ![зображення](https://github.com/FeltMe/webgl-basics/assets/41016761/bec840c4-8179-4c9b-aecf-470c3397b7c8)
 
-
-https://github.com/FeltMe/webgl-basics/assets/41016761/42e883f4-9dcf-4c5d-bd02-13d7012b45f3
-
+https://github.com/FeltMe/webgl-basics/assets/41016761/095982d4-1d48-45f5-8d48-71a41a08edf7
