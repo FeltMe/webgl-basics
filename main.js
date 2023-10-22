@@ -86,25 +86,44 @@ function draw() {
     surface.Draw();
 }
 
-function CreateSurfaceData()
+function CreateKnotClover()
 {
     let vertexList = [];
-    let R = 1;
-    let a = 0.25;
+    let u = 0;
+    let v = 0;
+    let uMax = Math.PI * 12
+    let vMax = Math.PI * 2
+    let uStep = uMax / 50;
+    let vStep = vMax / 50;
 
-    for (let i=0; i<360; i+=1) {
-        //vertexList.push( Math.sin(deg2rad(i)), 1, Math.cos(deg2rad(i)) );
-        //vertexList.push( Math.sin(deg2rad(i)), 0, Math.cos(deg2rad(i)) );
-        
-        vertexList.push( R + (a * Math.cos(i / 2)) * (Math.cos(i / 3)) );
-        vertexList.push( R + (a * Math.cos(i / 2)) * (Math.sin(i / 3)) );
-        vertexList.push( a + Math.sin(i / 2) );
+    for (let u = 0; u <= uMax; u += uStep) {
+        for (let v = 0; v <= vMax; v += vStep) {
+            let vert = CalculateKnotClover(u, v)
+            let avert = CalculateKnotClover(u + uStep, v)
+            let bvert = CalculateKnotClover(u, v + vStep)
+            let cvert = CalculateKnotClover(u + uStep, v + vStep)
 
+            vertexList.push(vert.x, vert.y, vert.z)
+            vertexList.push(avert.x, avert.y, avert.z)
+            vertexList.push(bvert.x, bvert.y, bvert.z)
+
+            vertexList.push(avert.x, avert.y, avert.z)
+            vertexList.push(cvert.x, cvert.y, cvert.z)
+            vertexList.push(bvert.x, bvert.y, bvert.z)
+        }
     }
-
     return vertexList;
 }
 
+function CalculateKnotClover(u, v) {
+    const multiplier = 0.25;
+    let R = 2;
+    let a = 0.5;
+    let x = ((R + (a * Math.cos(u / 2))) * (Math.cos(u / 3))) + (a * Math.cos(u / 3) * Math.cos(v - Math.PI));
+    let y = ((R + (a * Math.cos(u / 2))) * (Math.sin(u / 3))) + (a * Math.sin(u / 3) * Math.cos(v - Math.PI));
+    let z = a + Math.sin(u / 2) + (a * Math.sin(v - Math.PI));
+    return { x: x * multiplier, y: y * multiplier, z: z * multiplier }
+}
 
 /* Initialize the WebGL context. Called from init() */
 function initGL() {
@@ -118,7 +137,7 @@ function initGL() {
     shProgram.iColor                     = gl.getUniformLocation(prog, "color");
 
     surface = new Model('Surface');
-    surface.BufferData(CreateSurfaceData());
+    surface.BufferData(CreateKnotClover());
 
     gl.enable(gl.DEPTH_TEST);
 }
