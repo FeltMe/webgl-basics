@@ -89,8 +89,6 @@ function draw() {
 function CreateKnotClover()
 {
     let vertexList = [];
-    let u = 0;
-    let v = 0;
     let uMax = Math.PI * 12
     let vMax = Math.PI * 2
     let uStep = uMax / 50;
