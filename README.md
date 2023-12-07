@@ -2,7 +2,7 @@
 
 <h1>Drozdiuk Oleksandr</h1>
 
-<h2>Practical assignment #1 (Surface Rendering)</h2>
+<h2>Practical assignment #2</h2>
 
 <h3>"Clover Knot"</h3>
 
