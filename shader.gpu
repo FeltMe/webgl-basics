@@ -1,12 +1,19 @@
-
-
 // Vertex shader
 const vertexShaderSource = `
 attribute vec3 vertex;
+attribute vec3 normal;
+uniform mat4 WorldInverseTranspose;
 uniform mat4 ModelViewProjectionMatrix;
 
+varying vec3 vertexVarying;
+varying vec3 normalVarying;
+
 void main() {
-    gl_Position = ModelViewProjectionMatrix * vec4(vertex,1.0);
+    normalVarying = (WorldInverseTranspose * vec4(normalize(normal), 0.0)).xyz;
+
+    vec4 worldVertex = ModelViewProjectionMatrix * vec4(vertex,1.0);
+    vertexVarying = worldVertex.xyz / worldVertex.w;
+    gl_Position = worldVertex;
 }`;
 
 
@@ -18,7 +25,42 @@ const fragmentShaderSource = `
    precision mediump float;
 #endif
 
-uniform vec4 color;
+uniform vec3 LightPosition;
+uniform vec3 CamWorldPosition;
+
+uniform vec3 lightAmbientColor;
+uniform vec3 lightDiffuseColor;
+uniform vec3 lightSpecularColor;
+
+uniform vec3 matAmbientColor;
+uniform vec3 matDiffuseColor;
+uniform vec3 matSpecularColor;
+uniform float matShininess;
+
+float attenuationConstant = 1.0;
+float attenuationLiner = 0.09;
+float attenuationQuadratic = 0.032;
+
+varying vec3 vertexVarying;
+varying vec3 normalVarying;
+
+varying vec4 color;
 void main() {
-    gl_FragColor = color;
+
+    vec3 N = normalize(normalVarying);
+    vec3 L = normalize(vertexVarying - LightPosition);
+    float lambertian = max(0.0, dot(N, L));
+
+    vec3 reflectLighDir = normalize(reflect(-L, N)); 
+    vec3 dirToCamera = normalize(CamWorldPosition - vertexVarying);
+
+    vec3 ambient = matAmbientColor * lightAmbientColor;
+    vec3 diffuse = matDiffuseColor * lightDiffuseColor * lambertian;
+    vec3 specular = matSpecularColor * lightSpecularColor * pow(max(0.0, dot(dirToCamera, reflectLighDir)), matShininess);
+
+    float distance = length(LightPosition - vertexVarying);
+    float attenuation = 1.0 / (attenuationConstant + attenuationLiner * distance + 
+    		    attenuationQuadratic * (distance * distance));   
+
+    gl_FragColor = vec4(ambient * attenuation + diffuse * attenuation + specular * attenuation, 1);
 }`;
