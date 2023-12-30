@@ -4,31 +4,140 @@ let gl;                         // The webgl context.
 let surface;                    // A surface model
 let shProgram;                  // A shader program
 let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
+let Radius = 2;
 
-let World_X = 0;
-let World_Y = 0;
-let World_Z = -10;
-let LightColor = [1, 1, 1];
-let LightPosition = [0, 0, 2];
-let scale = 1.0;
+let lightSource;
 
-let AmbientColor = [0.1, 0.1, 0.1];
-let DiffuseColor = [0.25, 0.06, 0.3];
-let SpecularColor = [0.4, 0.4, 0.4];
+let CameraPosition = [0, 0, -10];
 
 function deg2rad(angle) {
     return angle * Math.PI / 180;
 }
 
+let isAnimating = false;
+let reqAnim;
+let currentAnimationTime = 0;
+let animationSpeed = 1;
+
+function SwitchAnimation(){
+
+    isAnimating = !isAnimating;
+    if(!isAnimating){
+        window.cancelAnimationFrame(reqAnim);
+    }
+    else{
+        ExecuteAnimation();
+    }
+
+}
+
+function ExecuteAnimation(){
+    if(!isAnimating){
+        return;
+    }
+    let deltaTime = 1000 / 60 ;
+    let x = surface.Position[0] + (Math.cos(currentAnimationTime / 500) * 2 * Radius);
+    let y = surface.Position[1] + (Math.sin(currentAnimationTime / 500) * 2 * Radius);
+    let z = surface.Position[2] + (Math.sin(currentAnimationTime / 500) * 2 * Radius);
+
+    lightSource.SetPosition([x, y, z]);
+    draw();
+    currentAnimationTime += deltaTime;
+    setTimeout(() => {
+        reqAnim = window.requestAnimationFrame(ExecuteAnimation);    
+    }, deltaTime);
+}
+
+
+
+function LightSource(shProgram){
+    this.Ambient = [0.1, 0.1, 0.1];
+    this.Diffuse = [1, 1, 1];
+    this.Specular = [1, 1, 1];
+    this.Model = m4.translation([0, 0, 0]);
+    this.ProjectionView = [];
+    this.shProgram = shProgram;
+    this.Visualization = new Model('Surface', shProgram);
+    this.Visualization.AmbientColor = [1, 1, 1];
+    this.Visualization.scale = 0.2;
+
+    this.shProgram.iAttribVertex = gl.getAttribLocation(this.shProgram.prog, "vertex");
+    this.shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(this.shProgram.prog, "ModelViewProjectionMatrix");
+
+    this.Initialize = function(){
+
+        let data = CreateKnotClover();
+        this.Visualization.BufferData(data[0], data[1]);
+
+    }
+
+    this.SetPosition = function(Position) {
+        this.Model[12] = Position[0];
+        this.Model[13] = Position[1];
+        this.Model[14] = Position[2];
+
+        this.Visualization.Position = Position;
+    };
+
+    this.Draw = function(projectionView){
+        this.shProgram.Use();
+        this.ProjectionView = projectionView;
+        this.Visualization.Draw(projectionView);
+    }
+
+    this.SetX = function(Value) {
+        this.SetPosition([Value, this.Model[13], this.Model[14]]);
+    };
+
+    this.SetY = function(Value) {
+        this.SetPosition([this.Model[12], Value, this.Model[14]]);
+    };
+
+    this.SetZ = function(Value) {
+        this.SetPosition([this.Model[12], this.Model[13], Value]);
+    };
+
+    this.GetWorldPosition = function() {
+        let mvp = m4.multiply(this.ProjectionView, this.Model);
+        return [mvp[12], mvp[13], mvp[14]];
+    };
+}
+
 
 // Constructor
-function Model(name) {
+function Model(name, shProgram) {
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
     this.iNormalBuffer = gl.createBuffer();
     this.count = 0;
+    this.shProgram = shProgram;
+    this.Position = [0, 0, 0];
+    this.scale = 1;
 
-    this.BufferData = function (vertices, normals) {
+    this.AmbientColor = [0.1, 0.1, 0.1];
+    this.DiffuseColor = [0.25, 0.06, 0.3];
+    this.SpecularColor = [0.4, 0.4, 0.4];
+
+    this.shProgram.iAttribVertex = gl.getAttribLocation(this.shProgram.prog, "vertex");
+    this.shProgram.iNormalVertex = gl.getAttribLocation(this.shProgram.prog, "normal");
+
+    this.shProgram.iWorldInverseTranspose = gl.getUniformLocation(this.shProgram.prog, "WorldInverseTranspose");
+    this.shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(this.shProgram.prog, "ModelViewProjectionMatrix");
+
+    this.shProgram.iMatAmbientColor = gl.getUniformLocation(this.shProgram.prog, "matAmbientColor");
+    this.shProgram.iMatDiffuseColor = gl.getUniformLocation(this.shProgram.prog, "matDiffuseColor");
+    this.shProgram.iMatSpecularColor = gl.getUniformLocation(this.shProgram.prog, "matSpecularColor");
+    this.shProgram.iMatShininess = gl.getUniformLocation(this.shProgram.prog, "matShininess");
+
+    this.shProgram.iLightAmbientColor = gl.getUniformLocation(this.shProgram.prog, "lightAmbientColor");
+    this.shProgram.iLightDiffuseColor = gl.getUniformLocation(this.shProgram.prog, "lightDiffuseColor");
+    this.shProgram.iLightSpecularColor = gl.getUniformLocation(this.shProgram.prog, "lightSpecularColor");
+
+    this.shProgram.iLightPosition = gl.getUniformLocation(this.shProgram.prog, "LightPosition");
+    this.shProgram.iCamWorldPosition = gl.getUniformLocation(this.shProgram.prog, "CamWorldPosition");
+
+    this.BufferData = function (vertices, normals) 
+    {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
@@ -39,10 +148,43 @@ function Model(name) {
         this.count = vertices.length / 3;
     }
 
-    this.Draw = function () {
+
+
+    this.Draw = function (projectionView) {
+
+        this.shProgram.Use();
+        
+        let modelView = spaceball.getViewMatrix();
+
+        let scaleMat = m4.scale(modelView, this.scale, this.scale, this.scale);
+    
+        let WorldMatrix = m4.translation(this.Position[0],this.Position[1], this.Position[2]);
+    
+        let matAccum0 = m4.multiply(scaleMat, modelView);
+        let matAccum2 = m4.multiply(WorldMatrix, matAccum0);
+            
+        let modelViewProjection = m4.multiply(projectionView, matAccum2 );
+        
+        var worldInverseMatrix = m4.inverse(scaleMat);
+        var worldInverseTransposeMatrix = m4.transpose(worldInverseMatrix);
+        gl.uniformMatrix4fv(this.shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+        gl.uniformMatrix4fv(shProgram.iWorldInverseTranspose, false, worldInverseTransposeMatrix);
+    
+        gl.uniform3fv(this.shProgram.iMatAmbientColor, this.AmbientColor);
+        gl.uniform3fv(this.shProgram.iMatDiffuseColor, this.DiffuseColor);
+        gl.uniform3fv(this.shProgram.iMatSpecularColor, this.SpecularColor);
+        gl.uniform1f(this.shProgram.iMatShininess, 8);
+    
+        gl.uniform3fv(this.shProgram.iLightAmbientColor, lightSource.Ambient);
+        gl.uniform3fv(this.shProgram.iLightDiffuseColor, lightSource.Diffuse);
+        gl.uniform3fv(this.shProgram.iLightSpecularColor, lightSource.Specular);
+    
+        gl.uniform3fv(this.shProgram.iCamWorldPosition, CameraPosition);
+        let pos = lightSource.GetWorldPosition();
+        gl.uniform3fv(this.shProgram.iLightPosition, pos);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(this.shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribVertex);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
@@ -93,47 +235,17 @@ function draw() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
     /* Set the values of the projection transformation */
-    let projection = m4.perspective(Math.PI/8, 1, 8, 12); 
-    
-    /* Get the view matrix from the SimpleRotator object.*/
-    let modelView = spaceball.getViewMatrix();
+    let projection = m4.perspective(1.2, 1, 2, 30); 
 
-    let scaleMat = m4.scale(modelView, scale, scale, scale);
+    let view = m4.lookAt(CameraPosition, [0, 0, 0], [0, 1, 0]);
 
-    let WorldMatrix = m4.translation(World_X, World_Y, World_Z);
-    let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
+    let projectionView = m4.multiply(projection, view);
 
-    let matAccum0 = m4.multiply(scaleMat, modelView);
-    let matAccum1 = m4.multiply(rotateToPointZero, matAccum0);
-    let matAccum2 = m4.multiply(WorldMatrix, matAccum1);
-        
-    /* Multiply the projection matrix times the modelview matrix to give the
-       combined transformation matrix, and send that to the shader program. */
-    let modelViewProjection = m4.multiply(projection, matAccum2 );
-
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection );
-    
-    var worldInverseMatrix = m4.inverse(matAccum1);
-    var worldInverseTransposeMatrix = m4.transpose(worldInverseMatrix);
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
-    gl.uniformMatrix4fv(shProgram.iWorldInverseTranspose, false, worldInverseTransposeMatrix);
-
-    gl.uniform3fv(shProgram.iMatAmbientColor, AmbientColor);
-    gl.uniform3fv(shProgram.iMatDiffuseColor, DiffuseColor);
-    gl.uniform3fv(shProgram.iMatSpecularColor, SpecularColor);
-    gl.uniform1f(shProgram.iMatShininess, 8);
-
-    gl.uniform3fv(shProgram.iLightAmbientColor, [0.1, 0.1, 0.1]);
-    gl.uniform3fv(shProgram.iLightDiffuseColor, LightColor);
-    gl.uniform3fv(shProgram.iLightSpecularColor, [1, 1, 1]);
-
-    gl.uniform3fv(shProgram.iCamWorldPosition, [0, 0, -20]);
-    gl.uniform3fv(shProgram.iLightPosition, LightPosition);
-    
-    surface.Draw();
+    lightSource.Draw(projectionView);
+    surface.Draw(projectionView);
 }
 
-function CreateKnotClover()
+function CreateKnotClover(R)
 {
     let vertexList = [];
     let normalsList = [];
@@ -221,47 +333,33 @@ function CalcDerivativeV(u, v, DeltaV, xyz) {
     return [Dxdv, Dydv, Dzdv];
 }
 
-function CalculateKnotClover(u, v) {
-    const multiplier = 0.25;
-    let R = 2;
+function CalculateKnotClover(u, v,) {
     let a = 0.5;
-    let x = ((R + (a * Math.cos(u / 2))) * (Math.cos(u / 3))) + (a * Math.cos(u / 3) * Math.cos(v - Math.PI));
-    let y = ((R + (a * Math.cos(u / 2))) * (Math.sin(u / 3))) + (a * Math.sin(u / 3) * Math.cos(v - Math.PI));
+    let x = ((Radius + (a * Math.cos(u / 2))) * (Math.cos(u / 3))) + (a * Math.cos(u / 3) * Math.cos(v - Math.PI));
+    let y = ((Radius + (a * Math.cos(u / 2))) * (Math.sin(u / 3))) + (a * Math.sin(u / 3) * Math.cos(v - Math.PI));
     let z = a + Math.sin(u / 2) + (a * Math.sin(v - Math.PI));
-    return { x: x * multiplier, y: y * multiplier, z: z * multiplier }
+    return { x: x, y: y, z: z }
 }
 
 /* Initialize the WebGL context. Called from init() */
 function initGL() {
-    let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+    let modelProg = createProgram(gl, vertexShaderSource, fragmentShaderSource);
 
-    shProgram = new ShaderProgram('Basic', prog);
+    shProgram = new ShaderProgram('Basic', modelProg);
     shProgram.Use();
-
-    shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
-    shProgram.iNormalVertex = gl.getAttribLocation(prog, "normal");
-
-    shProgram.iWorldInverseTranspose = gl.getUniformLocation(prog, "WorldInverseTranspose");
-    shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
-
-    shProgram.iMatAmbientColor = gl.getUniformLocation(prog, "matAmbientColor");
-    shProgram.iMatDiffuseColor = gl.getUniformLocation(prog, "matDiffuseColor");
-    shProgram.iMatSpecularColor = gl.getUniformLocation(prog, "matSpecularColor");
-    shProgram.iMatShininess = gl.getUniformLocation(prog, "matShininess");
-
-    shProgram.iLightAmbientColor = gl.getUniformLocation(prog, "lightAmbientColor");
-    shProgram.iLightDiffuseColor = gl.getUniformLocation(prog, "lightDiffuseColor");
-    shProgram.iLightSpecularColor = gl.getUniformLocation(prog, "lightSpecularColor");
-
-    shProgram.iLightPosition = gl.getUniformLocation(prog, "LightPosition");
-    shProgram.iCamWorldPosition = gl.getUniformLocation(prog, "CamWorldPosition");
-
-
-    surface = new Model('Surface');
+    surface = new Model('Surface', shProgram);
     let data = CreateKnotClover();
     surface.BufferData(data[0], data[1]);
 
+    let lsProg = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+    let lsShProgram = new ShaderProgram('LightSource', lsProg);
+    lsShProgram.Use();
+    lightSource = new LightSource(lsShProgram);
+    lightSource.SetPosition([0, 0, 0]);
+    lightSource.Initialize();
+
     gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LESS);
 }
 
 
@@ -326,12 +424,12 @@ function init() {
     spaceball = new TrackballRotator(canvas, draw, 0);
 
     canvas.onmousewheel = function (event) {
-        if (+(scale - (Math.round(event.wheelDelta / 150) / 10.0)).toFixed(1) < 0.0 || +(scale - (Math.round(event.wheelDelta / 150) / 10.0)).toFixed(1) > 2.0) {
+        if (+(surface.scale - (Math.round(event.wheelDelta / 150) / 10.0)).toFixed(1) < 0.0 || +(surface.scale - (Math.round(event.wheelDelta / 150) / 10.0)).toFixed(1) > 2.0) {
             return false;
         }
-        scale -= ((event.wheelDelta / 150) / 10.0);
-        document.getElementById("scale").value = +scale.toFixed(1);
-        document.getElementById("scale_text").innerHTML = +scale.toFixed(1);
+        surface.scale -= ((event.wheelDelta / 150) / 10.0);
+        document.getElementById("scale").value = +surface.scale.toFixed(1);
+        document.getElementById("scale_text").innerHTML = +surface.scale.toFixed(1);
         draw();
         return false;
     };

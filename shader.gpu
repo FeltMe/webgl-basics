@@ -12,7 +12,7 @@ void main() {
     normalVarying = (WorldInverseTranspose * vec4(normalize(normal), 0.0)).xyz;
 
     vec4 worldVertex = ModelViewProjectionMatrix * vec4(vertex,1.0);
-    vertexVarying = worldVertex.xyz / worldVertex.w;
+    vertexVarying = worldVertex.xyz;
     gl_Position = worldVertex;
 }`;
 
@@ -51,14 +51,14 @@ void main() {
     vec3 L = normalize(vertexVarying - LightPosition);
     float lambertian = max(0.0, dot(N, L));
 
-    vec3 reflectLighDir = normalize(reflect(-L, N)); 
+    vec3 reflectLighDir = normalize(reflect(L, N)); 
     vec3 dirToCamera = normalize(CamWorldPosition - vertexVarying);
 
     vec3 ambient = matAmbientColor * lightAmbientColor;
     vec3 diffuse = matDiffuseColor * lightDiffuseColor * lambertian;
     vec3 specular = matSpecularColor * lightSpecularColor * pow(max(0.0, dot(dirToCamera, reflectLighDir)), matShininess);
 
-    float distance = length(LightPosition - vertexVarying);
+    float distance = length(vertexVarying - LightPosition);
     float attenuation = 1.0 / (attenuationConstant + attenuationLiner * distance + 
     		    attenuationQuadratic * (distance * distance));   
 

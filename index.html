@@ -26,9 +26,10 @@
         <div class="row align-items-center">
             <div class="col mb-4 text-center">
                 <div id="canvas-holder">
-                    <canvas class="rounded-1" width="600" height="600" id="webglcanvas" style="background-color: bla"></canvas>
+                    <canvas class="rounded-1" width="600" height="600" id="webglcanvas" style="background-color: black"></canvas>
                 </div>
             </div>
+            <button onclick="SwitchAnimation()">Start/Stop Animation</button>
             <div class="col">
                 <div class="input-group mb-1">
                     <span class="input-group-text">Model X</span>
@@ -40,7 +41,7 @@
                 </div>
                 <div class="input-group mb-2">
                     <span class="input-group-text">Model Z</span>
-                    <input id="World_Z" type="number" class="form-control h-auto d-inline-block" aria-describedby="World_Z" value="-10" step="0.1">
+                    <input id="World_Z" type="number" class="form-control h-auto d-inline-block" aria-describedby="World_Z" value="0" step="0.1">
                 </div>
 
                 <div class="input-group mb-1">
@@ -53,7 +54,7 @@
                 </div>
                 <div class="input-group mb-2">
                     <span class="input-group-text">Light Z</span>
-                    <input id="Light_Z" type="number" class="form-control h-auto d-inline-block" aria-describedby="Light_Z" value="-10" step="0.1">
+                    <input id="Light_Z" type="number" class="form-control h-auto d-inline-block" aria-describedby="Light_Z" value="-2" step="0.1">
                 </div>
 
                 <div class="me-5">
@@ -101,53 +102,55 @@
     var input_ly = document.getElementById("Light_Y");
     var input_lz = document.getElementById("Light_Z");
 
+    var input_as = document.getElementById("AnimSpeed");
+
     input_x.addEventListener("input", function() {
-        World_X = this.value;
+        surface.Position[0] = parseFloat(this.value);
         draw();
     }, false);
 
     input_y.addEventListener("input", function() {
-        World_Y = this.value;
+        surface.Position[1] = parseFloat(this.value);
         draw();
     }, false);
 
     input_z.addEventListener("input", function() {
-        World_Z = this.value;
+        surface.Position[2] = parseFloat(this.value);
         draw();
     }, false);
 
     input_lx.addEventListener("input", function() {
-        LightPosition[0] = this.value;
+        lightSource.SetX(this.value);
         draw();
     }, false);
 
     input_ly.addEventListener("input", function() {
-        LightPosition[1] = this.value;
+        lightSource.SetY(this.value);
         draw();
     }, false);
 
     input_lz.addEventListener("input", function() {
-        LightPosition[2] = this.value;
+        lightSource.SetZ(this.value);
         draw();
     }, false);
 
     input_lc.addEventListener("input", function() {
-        LightColor = [hexToRgb(this.value).r / 255, hexToRgb(this.value).g / 255, hexToRgb(this.value).b / 255];
+        lightSource.Diffuse = [hexToRgb(this.value).r / 255, hexToRgb(this.value).g / 255, hexToRgb(this.value).b / 255];
         draw();
     }, false);
 
     input_a.addEventListener("input", function() {
-        AmbientColor = [hexToRgb(this.value).r / 255, hexToRgb(this.value).g / 255, hexToRgb(this.value).b / 255];
+        surface.AmbientColor = [hexToRgb(this.value).r / 255, hexToRgb(this.value).g / 255, hexToRgb(this.value).b / 255];
         draw();
     }, false);
 
     input_d.addEventListener("input", function() {
-        DiffuseColor = [hexToRgb(this.value).r / 255, hexToRgb(this.value).g / 255, hexToRgb(this.value).b / 255];
+        surface.DiffuseColor = [hexToRgb(this.value).r / 255, hexToRgb(this.value).g / 255, hexToRgb(this.value).b / 255];
         draw();
     }, false);
 
     input_s.addEventListener("input", function() {
-        SpecularColor = [hexToRgb(this.value).r / 255, hexToRgb(this.value).g / 255, hexToRgb(this.value).b / 255];
+        surface.SpecularColor = [hexToRgb(this.value).r / 255, hexToRgb(this.value).g / 255, hexToRgb(this.value).b / 255];
         draw();
     }, false);
 
