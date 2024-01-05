@@ -2,17 +2,29 @@
 const vertexShaderSource = `
 attribute vec3 vertex;
 attribute vec3 normal;
+attribute vec2 textureCoord;    
 uniform mat4 WorldInverseTranspose;
 uniform mat4 ModelViewProjectionMatrix;
+uniform vec3 pointPosition;
 
 varying vec3 vertexVarying;
 varying vec3 normalVarying;
+varying vec2 v_texcoord;
+varying vec4 pointColor;
 
 void main() {
     normalVarying = (WorldInverseTranspose * vec4(normalize(normal), 0.0)).xyz;
 
+    pointColor = vec4(0.0, 0.0, 0.0, 0.0);
+    if(distance(pointPosition, vertex) < 0.1){
+        pointColor.x = 1.0;
+        pointColor.y = -1.0;
+        pointColor.z = -1.0;
+    }
+
     vec4 worldVertex = ModelViewProjectionMatrix * vec4(vertex,1.0);
     vertexVarying = worldVertex.xyz;
+    v_texcoord = textureCoord;
     gl_Position = worldVertex;
 }`;
 
@@ -38,29 +50,55 @@ uniform vec3 matSpecularColor;
 uniform float matShininess;
 
 float attenuationConstant = 1.0;
-float attenuationLiner = 0.09;
-float attenuationQuadratic = 0.032;
+float attenuationLiner = 0.045;
+float attenuationQuadratic = 0.0075;
+
+uniform vec3 pointPosition;
+uniform vec2 scalePoint;
+uniform float textureScale;
 
 varying vec3 vertexVarying;
 varying vec3 normalVarying;
-
+uniform sampler2D tmu;
+varying vec2 v_texcoord;
+varying vec4 pointColor;
+ 
 varying vec4 color;
-void main() {
+mat3 getScaleMatrix(float scale, vec2 center) {
+    return mat3(
+        scale, 0.0, 0.0,
+        0.0, scale, 0.0,
+        center.x * (1.0 - scale), center.y * (1.0 - scale), 1.0
+    );
+}
 
+void main() {
+    // Calculate Lambertian reflection
     vec3 N = normalize(normalVarying);
     vec3 L = normalize(vertexVarying - LightPosition);
     float lambertian = max(0.0, dot(N, L));
 
-    vec3 reflectLighDir = normalize(reflect(L, N)); 
+    // Calculate specular reflection
+    vec3 reflectLighDir = normalize(reflect(L, N));
     vec3 dirToCamera = normalize(CamWorldPosition - vertexVarying);
-
     vec3 ambient = matAmbientColor * lightAmbientColor;
+
+    // Apply Lambertian reflection
     vec3 diffuse = matDiffuseColor * lightDiffuseColor * lambertian;
+
+    // Apply specular reflection
     vec3 specular = matSpecularColor * lightSpecularColor * pow(max(0.0, dot(dirToCamera, reflectLighDir)), matShininess);
 
+    // Calculate distance-based attenuation
     float distance = length(vertexVarying - LightPosition);
-    float attenuation = 1.0 / (attenuationConstant + attenuationLiner * distance + 
-    		    attenuationQuadratic * (distance * distance));   
+    float attenuation = 1.0 / (attenuationConstant + attenuationLiner * distance + attenuationQuadratic * (distance * distance));
 
-    gl_FragColor = vec4(ambient * attenuation + diffuse * attenuation + specular * attenuation, 1);
+    // Create a scaling matrix
+    mat3 scaleMatrix = getScaleMatrix(textureScale, scalePoint);
+
+    // Apply scaling to UV coordinates
+    vec3 scaledUV = vec3(v_texcoord, 1.0) * scaleMatrix;
+
+    // Sample the texture and apply lighting calculations
+    gl_FragColor = texture2D(tmu, scaledUV.xy) * vec4(ambient * attenuation + diffuse * attenuation + specular * attenuation, 1) + pointColor;
 }`;

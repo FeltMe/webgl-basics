@@ -4,9 +4,10 @@ let gl;                         // The webgl context.
 let surface;                    // A surface model
 let shProgram;                  // A shader program
 let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
-let Radius = 2;
+let Radius = 1;
 
 let lightSource;
+let texturePoint = [0, 0]
 
 let CameraPosition = [0, 0, -10];
 
@@ -18,6 +19,33 @@ let isAnimating = false;
 let reqAnim;
 let currentAnimationTime = 0;
 let animationSpeed = 1;
+let textureScale = 1;
+
+window.onkeydown = (e) => {
+    switch (e.keyCode) {
+        case 65:
+            texturePoint[0] += 0.01;
+            break;
+        case 68:
+            texturePoint[0] -= 0.01;
+            break;
+        case 87:
+            texturePoint[1] += 0.01;
+            break;
+        case 83:
+            texturePoint[1] -= 0.01;
+            break;
+    }
+    texturePoint[1] = Math.max(0.001, Math.min(texturePoint[1], 0.999))
+
+    if(texturePoint[0] >= 1){
+        texturePoint[0] = 0.001;
+    }
+    else if(texturePoint[0] <= 0){
+        texturePoint[0] = 0.99;
+    }
+    draw();
+}
 
 function SwitchAnimation(){
 
@@ -80,9 +108,9 @@ function LightSource(shProgram){
     };
 
     this.Draw = function(projectionView){
-        this.shProgram.Use();
+        //this.shProgram.Use();
         this.ProjectionView = projectionView;
-        this.Visualization.Draw(projectionView);
+        //this.Visualization.Draw(projectionView);
     }
 
     this.SetX = function(Value) {
@@ -109,13 +137,14 @@ function Model(name, shProgram) {
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
     this.iNormalBuffer = gl.createBuffer();
+    this.iTextureBuffer = gl.createBuffer();
     this.count = 0;
     this.shProgram = shProgram;
     this.Position = [0, 0, 0];
     this.scale = 1;
 
     this.AmbientColor = [0.1, 0.1, 0.1];
-    this.DiffuseColor = [0.25, 0.06, 0.3];
+    this.DiffuseColor = [1, 1, 1];
     this.SpecularColor = [0.4, 0.4, 0.4];
 
     this.shProgram.iAttribVertex = gl.getAttribLocation(this.shProgram.prog, "vertex");
@@ -136,14 +165,22 @@ function Model(name, shProgram) {
     this.shProgram.iLightPosition = gl.getUniformLocation(this.shProgram.prog, "LightPosition");
     this.shProgram.iCamWorldPosition = gl.getUniformLocation(this.shProgram.prog, "CamWorldPosition");
 
-    this.BufferData = function (vertices, normals) 
-    {
+    this.shProgram.iTextureCoord = gl.getAttribLocation(this.shProgram.prog, "textureCoord");
+    this.shProgram.iTMU = gl.getUniformLocation(this.shProgram.prog, "tmu");
+    this.shProgram.iPointVizualizationPosition = gl.getUniformLocation(this.shProgram.prog, "pointPosition");
+    this.shProgram.iScalePoint = gl.getUniformLocation(this.shProgram.prog, "scalePoint");
+    this.shProgram.iScaleValue = gl.getUniformLocation(this.shProgram.prog, "textureScale");
 
+    this.BufferData = function (vertices, normals, textureCoords) 
+    {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer)
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STREAM_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STREAM_DRAW);
 
         this.count = vertices.length / 3;
     }
@@ -183,6 +220,11 @@ function Model(name, shProgram) {
         let pos = lightSource.GetWorldPosition();
         gl.uniform3fv(this.shProgram.iLightPosition, pos);
 
+        let point = CalculateKnotClover(map(texturePoint[0], 0, 1,0, uMax), map(texturePoint[1], 0, 1,0, vMax));
+        gl.uniform3fv(shProgram.iPointVizualizationPosition, [point.x, point.y, point.z]);
+        gl.uniform2fv(shProgram.iScalePoint, texturePoint);
+        gl.uniform1f(shProgram.iScaleValue, textureScale);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.vertexAttribPointer(this.shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribVertex);
@@ -190,6 +232,13 @@ function Model(name, shProgram) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
         gl.vertexAttribPointer(shProgram.iNormalVertex, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iNormalVertex);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+        gl.vertexAttribPointer(shProgram.iTextureCoord, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iTextureCoord);
+
+        gl.uniform1i(shProgram.iTMU, 0);
+        gl.enable(gl.TEXTURE_2D);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.count);
     }
@@ -201,6 +250,8 @@ function ShaderProgram(name, program) {
     this.name = name;
     this.prog = program;
 
+    this.iTextureCoord = -1;
+    this.iTMU = -1;
 
     this.iAttribVertex = -1;
     this.iNormalVertex = -1;
@@ -219,6 +270,10 @@ function ShaderProgram(name, program) {
 
     this.iLightPosition = -1;
     this.iCamWorldPosition = -1;
+
+    this.iScalePoint = -1;
+    this.iPointVizualizationPosition = -1;
+    this.iScaleValue = -1;
 
     this.Use = function () {
         gl.useProgram(this.prog);
@@ -245,12 +300,13 @@ function draw() {
     surface.Draw(projectionView);
 }
 
+let uMax = Math.PI * 12
+let vMax = Math.PI * 2
 function CreateKnotClover(R)
 {
     let vertexList = [];
     let normalsList = [];
-    let uMax = Math.PI * 12
-    let vMax = Math.PI * 2
+    let texture = [];
     let uStep = uMax / 100;
     let vStep = vMax / 100;
 
@@ -264,6 +320,23 @@ function CreateKnotClover(R)
             let n3 = CalcAnalyticNormal(u, v + vStep, bvert)
             let cvert = CalculateKnotClover(u + uStep, v + vStep)
             let n4 = CalcAnalyticNormal(u + uStep, v + vStep, cvert)
+
+            let u1 = map(u, 0, uMax, 0, 6)
+            let v1 = map(v, 0, vMax, 0, 6)
+            texture.push(u1, v1)
+            u1 = map(u + uStep, 0, uMax, 0, 6)
+            texture.push(u1, v1)
+            u1 = map(u, 0, uMax, 0, 6)
+            v1 = map(v + vStep, 0, vMax, 0, 6)
+            texture.push(u1, v1)
+            u1 = map(u + uStep, 0, uMax, 0, 6)
+            v1 = map(v, 0, vMax, 0, 6)
+            texture.push(u1, v1)
+            v1 = map(v + vStep, 0, vMax, 0, 6)
+            texture.push(u1, v1)
+            u1 = map(u, 0, uMax, 0, 6)
+            v1 = map(v + vStep, 0, vMax, 0, 6)
+            texture.push(u1, v1)
 
             vertexList.push(vert.x, vert.y, vert.z)
             vertexList.push(avert.x, avert.y, avert.z)
@@ -282,7 +355,13 @@ function CreateKnotClover(R)
             normalsList.push(n3.x, n3.y, n3.z)
         }
     }
-    return [vertexList, normalsList];
+    return [vertexList, normalsList, texture];
+}
+
+function map(val, f1, t1, f2, t2) {
+    let m;
+    m = (val - f1) * (t2 - f2) / (t1 - f1) + f2
+    return Math.min(Math.max(m, f2), t2);
 }
 
 function CalcAnalyticNormal(u, v, xyz)
@@ -343,20 +422,7 @@ function CalculateKnotClover(u, v,) {
 
 /* Initialize the WebGL context. Called from init() */
 function initGL() {
-    let modelProg = createProgram(gl, vertexShaderSource, fragmentShaderSource);
-
-    shProgram = new ShaderProgram('Basic', modelProg);
-    shProgram.Use();
-    surface = new Model('Surface', shProgram);
-    let data = CreateKnotClover();
-    surface.BufferData(data[0], data[1]);
-
-    let lsProg = createProgram(gl, vertexShaderSource, fragmentShaderSource);
-    let lsShProgram = new ShaderProgram('LightSource', lsProg);
-    lsShProgram.Use();
-    lightSource = new LightSource(lsShProgram);
-    lightSource.SetPosition([0, 0, 0]);
-    lightSource.Initialize();
+    LoadTexture();
 
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
@@ -433,6 +499,46 @@ function init() {
         draw();
         return false;
     };
+}
 
-    draw();
+function LoadTexture() {
+    let texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+
+    const image = new Image();
+    image.crossOrigin = 'anonymus';
+
+    image.src = "https://raw.githubusercontent.com/FeltMe/webgl-basics/CGW/texture.jpg";
+    image.onload = () => {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            image
+        );
+        let modelProg = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+
+        shProgram = new ShaderProgram('Basic', modelProg);
+        shProgram.Use();
+        surface = new Model('Surface', shProgram);
+        let data = CreateKnotClover();
+        surface.BufferData(data[0], data[1], data[2]);
+    
+        let lsProg = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+        let lsShProgram = new ShaderProgram('LightSource', lsProg);
+        lsShProgram.Use();
+        lightSource = new LightSource(lsShProgram);
+        lightSource.SetPosition([0, 0, -2]);
+        lightSource.Initialize();
+
+
+        draw()
+    }
 }

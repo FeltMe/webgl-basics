@@ -31,6 +31,10 @@
             </div>
             <button onclick="SwitchAnimation()">Start/Stop Animation</button>
             <div class="col">
+                <div class="input-group mb-2">
+                    <span class="input-group-text">Texture  Scale</span>
+                    <input id="tScale" type="number" class="form-control h-auto d-inline-block" aria-describedby="tScale" value="0" step="0.1">
+                </div>
                 <div class="input-group mb-1">
                     <span class="input-group-text">Model X</span>
                     <input id="World_X" type="number" class="form-control h-auto d-inline-block" aria-describedby="World_X" value="0" step="0.1">
@@ -103,6 +107,7 @@
     var input_lz = document.getElementById("Light_Z");
 
     var input_as = document.getElementById("AnimSpeed");
+    var input_ts = document.getElementById("tScale");
 
     input_x.addEventListener("input", function() {
         surface.Position[0] = parseFloat(this.value);
@@ -111,6 +116,11 @@
 
     input_y.addEventListener("input", function() {
         surface.Position[1] = parseFloat(this.value);
+        draw();
+    }, false);
+
+    input_ts.addEventListener("input", function() {
+        textureScale = parseFloat(this.value);
         draw();
     }, false);
 
